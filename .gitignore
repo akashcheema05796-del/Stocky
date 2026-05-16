@@ -1,33 +1,41 @@
-﻿# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.egg-info/
-dist/
+﻿# ── Build artifacts ──────────────────────────────────────────────────
+target/
 build/
+dist/
+*.egg-info/
 .eggs/
 
-# Virtual environment
+# ── Virtual environment ──────────────────────────────────────────────
 .venv/
 venv/
 env/
 
-# Large data cache (re-downloads automatically on first run)
+# ── Compiled extensions ──────────────────────────────────────────────
+*.so
+*.pyd
+*.dll
+
+# ── Data cache (auto-downloaded on first run) ────────────────────────
 data/
 
-# Generated HTML outputs
+# ── Generated dashboard HTML ─────────────────────────────────────────
 dashboard.html
 tearsheet*.html
 
-# IDE
+# ── Python cache ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+
+# ── IDE ──────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# OS
+# ── OS ───────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# Logs
+# ── Logs ─────────────────────────────────────────────────────────────
 *.log
