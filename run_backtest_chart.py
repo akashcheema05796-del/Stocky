@@ -54,9 +54,18 @@ FAST_EMA     = 100
 SLOW_EMA     = 200
 TRADE_SIZE   = Decimal("0.01")
 START_BAL    = 10_000
-STOP_LOSS    = 0.02           # 2.0 %
+STOP_LOSS    = 0.02           # 2.0 %  (used only when ATR_SL_MULT == 0)
 OUTPUT_FILE  = Path("dashboard.html").resolve()
 CACHE_DIR    = Path("data")   # local cache folder — data downloaded once
+
+# ── Enhancement knobs ──────────────────────────────────────────────────
+# ATR-based SL: set > 0 to replace fixed-% SL with ATR(14) × multiplier.
+# Sweep winner: 3.0× gives tighter average loss and higher profit factor.
+ATR_SL_MULT  = 3.0            # 0.0 = use fixed STOP_LOSS %; 3.0 recommended
+RSI_LONG_MAX = 70.0           # skip long  when RSI(14) > this  (70 = effectively off)
+RSI_SHORT_MIN= 30.0           # skip short when RSI(14) < this  (30 = effectively off)
+MIN_EMA_GAP  = 0.0            # min |fast-slow|/slow to trade   (0 = off)
+SL_COOLDOWN  = 0              # bars to wait after SL hit        (0 = off)
 # ───────────────────────────────────────────────────────────────────────
 
 # Timeframe metadata table
@@ -269,6 +278,11 @@ def run_backtest(bars: list[Bar], inst: CryptoPerpetual) -> BacktestEngine:
         fast_ema_period=FAST_EMA,
         slow_ema_period=SLOW_EMA,
         stop_loss_pct=STOP_LOSS,
+        atr_sl_multiplier=ATR_SL_MULT,
+        rsi_long_max=RSI_LONG_MAX,
+        rsi_short_min=RSI_SHORT_MIN,
+        min_ema_gap_pct=MIN_EMA_GAP,
+        sl_cooldown_bars=SL_COOLDOWN,
     )))
     t0 = time.time()
     engine.run()
@@ -443,7 +457,8 @@ def build_chart_data(raw: list, engine: BacktestEngine):
         "max_loss":    f"{float(losers.min()):+.4f}"  if len(losers)  else "0",
         "fast_ema":    FAST_EMA,
         "slow_ema":    SLOW_EMA,
-        "sl_pct":      f"{STOP_LOSS*100:.2f}%",
+        "sl_pct":      (f"ATR×{ATR_SL_MULT}" if ATR_SL_MULT > 0
+                        else f"{STOP_LOSS*100:.2f}%"),
         "years":       YEARS,
         "tf":          TIMEFRAME,
         "tf_label":    _tf["label"],
@@ -967,7 +982,8 @@ def fill_template(template: str, candles, ema_fast, ema_slow,
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("  EMA Cross — Professional Chart Dashboard")
-    print(f"  EMA {FAST_EMA}/{SLOW_EMA}  |  SL {STOP_LOSS*100}%  |  {YEARS} years  |  {TIMEFRAME} bars")
+    sl_desc = f"ATR×{ATR_SL_MULT}" if ATR_SL_MULT > 0 else f"Fixed {STOP_LOSS*100:.1f}%"
+    print(f"  EMA {FAST_EMA}/{SLOW_EMA}  |  SL {sl_desc}  |  RSI {RSI_SHORT_MIN}/{RSI_LONG_MAX}  |  {YEARS} years  |  {TIMEFRAME} bars")
     print("=" * 60 + "\n")
 
     raw_1m = fetch(YEARS)
