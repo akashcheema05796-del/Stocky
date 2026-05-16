@@ -49,19 +49,19 @@ from strategies.ema_cross_rr import EMACrossRR, EMACrossRRConfig
 
 # ── Settings ───────────────────────────────────────────────────────────
 YEARS        = 3              # years of history to backtest
-TIMEFRAME    = "1H"           # chart + backtest bar size: "1m" "5m" "15m" "1H" "4H"
-FAST_EMA     = 100
-SLOW_EMA     = 200
+TIMEFRAME    = "1m"           # chart + backtest bar size: "1m" "5m" "15m" "1H" "4H"
+FAST_EMA     = 6_000          # = EMA(100h) expressed in 1-minute bars
+SLOW_EMA     = 12_000         # = EMA(200h) expressed in 1-minute bars
 TRADE_SIZE   = Decimal("0.01")
 START_BAL    = 10_000
-STOP_LOSS    = 0.02           # 2.0 %  (used only when ATR_SL_MULT == 0)
+STOP_LOSS    = 0.02           # 2.0 % — same as 1H strategy
 OUTPUT_FILE  = Path("dashboard.html").resolve()
 CACHE_DIR    = Path("data")   # local cache folder — data downloaded once
 
 # ── Enhancement knobs ──────────────────────────────────────────────────
-# ATR-based SL: set > 0 to replace fixed-% SL with ATR(14) × multiplier.
-# Sweep winner: 3.0× gives tighter average loss and higher profit factor.
-ATR_SL_MULT  = 3.0            # 0.0 = use fixed STOP_LOSS %; 3.0 recommended
+# NOTE: On 1-minute bars ATR(14) ≈ $10-30, making ATR-based SL too tight.
+# Keep ATR_SL_MULT = 0.0 for 1-minute; use fixed STOP_LOSS instead.
+ATR_SL_MULT  = 0.0            # 0.0 = use fixed STOP_LOSS %
 RSI_LONG_MAX = 70.0           # skip long  when RSI(14) > this  (70 = effectively off)
 RSI_SHORT_MIN= 30.0           # skip short when RSI(14) < this  (30 = effectively off)
 MIN_EMA_GAP  = 0.0            # min |fast-slow|/slow to trade   (0 = off)
@@ -343,8 +343,14 @@ def build_chart_data(raw: list, engine: BacktestEngine):
     pos_df   = engine.trader.generate_positions_report()
     fills_df = engine.trader.generate_order_fills_report()
 
-    closed   = pos_df[pos_df["side"] == "FLAT"].copy()
-    closed["pnl"] = closed["realized_pnl"].str.replace(" USDT", "").astype(float)
+    if "side" in pos_df.columns:
+        closed = pos_df[pos_df["side"] == "FLAT"].copy()
+        closed["pnl"] = closed["realized_pnl"].str.replace(" USDT", "").astype(float)
+    else:
+        closed = pd.DataFrame(columns=["pnl", "ts_opened", "ts_closed",
+                                        "avg_px_open", "avg_px_close",
+                                        "entry", "duration_ns",
+                                        "closing_order_id"])
 
     # Build closing order -> type map from fills
     sl_order_ids = set()
@@ -429,7 +435,7 @@ def build_chart_data(raw: list, engine: BacktestEngine):
     equity   = [{"time": t, "value": v} for t, v in zip(acct_ts, acct_bal)]
 
     # Stats
-    pnls      = closed["pnl"]
+    pnls      = closed["pnl"] if len(closed) else pd.Series([], dtype=float)
     winners   = pnls[pnls > 0]
     losers    = pnls[pnls < 0]
     start_bal = float(acct["total"].iloc[0])
@@ -438,7 +444,7 @@ def build_chart_data(raw: list, engine: BacktestEngine):
     win_rate  = len(winners) / len(pnls) * 100 if len(pnls) else 0
     avg_win   = float(winners.mean()) if len(winners) else 0
     avg_loss  = float(losers.mean())  if len(losers)  else 0
-    pf        = abs(avg_win / avg_loss) if avg_loss else 0
+    pf        = abs(winners.sum() / losers.sum()) if len(losers) and losers.sum() != 0 else 0
 
     stats = {
         "start_bal":   f"{start_bal:,.2f}",
@@ -462,6 +468,12 @@ def build_chart_data(raw: list, engine: BacktestEngine):
         "years":       YEARS,
         "tf":          TIMEFRAME,
         "tf_label":    _tf["label"],
+        # Chip shown when chart display differs from backtest timeframe
+        "chart_res_chip": (
+            '<span class="chip" style="background:#1a2234;color:#94a3b8">'
+            'chart 1H</span>'
+            if TIMEFRAME not in ("1H", "4H") else ""
+        ),
     }
 
     return candles, ema_fast_data, ema_slow_data, markers, equity, trades, stats
@@ -619,10 +631,11 @@ body{background:var(--bg);color:var(--text);
 <div id="topbar">
   <span class="logo">EMA<span>Cross</span></span>
   <span class="chip">BTC-USDT-SWAP</span>
-  <span class="chip">__TF__</span>
+  <span class="chip">__TF__ bars</span>
   <span class="chip">EMA __FAST__ / __SLOW__</span>
   <span class="chip red">SL __SL_PCT__</span>
-  <span class="chip green">No TP</span>
+  <span class="chip green">Trailing</span>
+  __CHART_RES_CHIP__
   <span class="spacer"></span>
   <span class="ts">__YEARS__-year backtest</span>
   <button id="fit-btn">Fit All</button>
@@ -972,8 +985,9 @@ def fill_template(template: str, candles, ema_fast, ema_slow,
     html = html.replace("__SLOW__",      str(stats["slow_ema"]))
     html = html.replace("__SL_PCT__",    stats["sl_pct"])
     html = html.replace("__YEARS__",     str(stats["years"]))
-    html = html.replace("__TF_LABEL__",  stats["tf_label"])
-    html = html.replace("__TF__",        stats["tf"])
+    html = html.replace("__TF_LABEL__",       stats["tf_label"])
+    html = html.replace("__TF__",             stats["tf"])
+    html = html.replace("__CHART_RES_CHIP__", stats["chart_res_chip"])
     return html
 
 

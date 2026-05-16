@@ -33,6 +33,7 @@ from nautilus_trader.model.enums import OrderType
 from nautilus_trader.model.enums import TimeInForce
 from nautilus_trader.model.enums import TriggerType
 from nautilus_trader.model.events import OrderFilled
+from nautilus_trader.model.events import OrderRejected
 from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments import Instrument
@@ -217,6 +218,31 @@ class EMACrossRR(Strategy):
     # ------------------------------------------------------------------
 
     def on_event(self, event) -> None:
+        # ── SL order rejected (price gapped past stop level) ──────────
+        # This can happen on fast-moving bars (common on 1-minute data).
+        # Treat it like an immediate SL fill: close the position at market.
+        if isinstance(event, OrderRejected):
+            if (self._sl_order_id is not None
+                    and event.client_order_id == self._sl_order_id):
+                self.log.warning(
+                    f"SL order REJECTED (price already past stop) — "
+                    f"closing position at market",
+                )
+                self._sl_order_id = None
+                self.cancel_all_orders(self.config.instrument_id)
+                self.close_all_positions(self.config.instrument_id)
+                # State will be cleaned up when the close fill arrives
+                self._entry_side   = None
+                self._peak_px      = 0.0
+                self._trail_px     = 0.0
+                self._trail_active = False
+                self._sl_distance  = 0.0
+                self._be_target_px = 0.0
+                self._at_breakeven = False
+                if self.config.sl_cooldown_bars > 0:
+                    self._cooldown_bars_left = self.config.sl_cooldown_bars
+            return
+
         if not isinstance(event, OrderFilled):
             return
 
