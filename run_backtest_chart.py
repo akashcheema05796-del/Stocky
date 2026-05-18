@@ -2,7 +2,7 @@
 """
 EMA Cross Backtest  +  Professional HTML Dashboard
 ====================================================
-Runs the EMA(100/200) strategy on 30 days of real BTC-USDT-SWAP 1-minute
+Runs the EMA(9/14) strategy on 3 years of real BTC-USDT-SWAP 1-minute
 data, then generates a fully self-contained HTML file that opens in any
 browser and looks like a TradingView professional dashboard.
 
@@ -50,11 +50,11 @@ from strategies.ema_cross_rr import EMACrossRR, EMACrossRRConfig
 # ── Settings ───────────────────────────────────────────────────────────
 YEARS        = 3              # years of history to backtest
 TIMEFRAME    = "1m"           # chart + backtest bar size: "1m" "5m" "15m" "1H" "4H"
-FAST_EMA     = 6_000          # = EMA(100h) expressed in 1-minute bars
-SLOW_EMA     = 12_000         # = EMA(200h) expressed in 1-minute bars
+FAST_EMA     = 9              # fast EMA period (9-candle)
+SLOW_EMA     = 14             # slow EMA period (14-candle)
 TRADE_SIZE   = Decimal("0.01")
 START_BAL    = 10_000
-STOP_LOSS    = 0.02           # 2.0 % — same as 1H strategy
+STOP_LOSS    = 0.005          # 0.5 % — tight SL suited for 1-min scalping
 OUTPUT_FILE  = Path("dashboard.html").resolve()
 CACHE_DIR    = Path("data")   # local cache folder — data downloaded once
 
